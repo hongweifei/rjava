@@ -89,7 +89,7 @@
 //! ```no_run
 //! # use parking_lot::Mutex;
 //! # use rjava::prelude::*;
-//! # use rjava::{native, native_inst};
+//! # use rjava::{native, native_inst, register_natives};
 //! struct Counter(Mutex<i64>);
 //!
 //! fn counter_create(env: &mut jni::Env, (): ()) -> JavaResult<JObject> {
@@ -115,15 +115,13 @@
 //! # fn main() -> JavaResult<()> {
 //! # let java = Java::builder().build()?;
 //! # let clazz = java.class("com.example.Counter")?;
-//! # clazz.register_natives(&[
-//! #     // `create` returns a concrete class (`Counter`): the type-derived
-//! #     // form derives `()Ljava/lang/Object;` (R = JObject), and
-//! #     // register_natives resolves the exact return type via reflection
-//! #     // at registration time — no explicit signature needed.
-//! #     native!("create", counter_create)?,
-//! #     native_inst!("increment", counter_increment)?,
-//! #     native_inst!("value", counter_value)?,
-//! # ])?;
+//! # // The batch form: one `?`, no array brackets (equivalent to the array
+//! # // form `clazz.register_natives(&[native!(...)?, ...])?`). `create`
+//! # // returns a concrete class (`Counter`): the type-derived form derives
+//! # // `()Ljava/lang/Object;` (R = JObject), and register_natives resolves
+//! # // the exact return type via reflection at registration time — no
+//! # // explicit signature needed.
+//! # register_natives!(clazz, native!("create", counter_create), native_inst!("increment", counter_increment), native_inst!("value", counter_value))?;
 //! # let counter: JObject = clazz.call_static("create", ())?;
 //! # let v: i64 = counter.call("increment", (5_i64,))?;
 //! # assert_eq!(v, 5);

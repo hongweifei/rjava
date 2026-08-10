@@ -140,6 +140,11 @@
 //! # Ok(()) }
 //! ```
 //!
+//! Registering several methods at once: the [`register_natives!`] batch
+//! macro is the one-`?` equivalent of the array call above — no array
+//! brackets, any mix of `native!` / `native_inst!` / `async_native!` items,
+//! optional trailing comma (see the macro docs for the full example).
+//!
 //! Rules and mechanics:
 //!
 //! * The Rust function signature is
@@ -264,7 +269,7 @@
 //! ```rust,no_run
 //! # use parking_lot::Mutex;
 //! # use rjava::prelude::*;
-//! # use rjava::{native, native_inst};
+//! # use rjava::{native, native_inst, register_natives};
 //! # struct Counter(Mutex<i64>);
 //! # impl Counter {
 //! #     fn new() -> Self { Counter(Mutex::new(0)) }
@@ -288,14 +293,12 @@
 //! # fn main() -> JavaResult<()> {
 //! # let java = Java::builder().build()?;
 //! # let clazz = java.class("com.example.Counter")?;
-//! # clazz.register_natives(&[
-//! #     // `create` returns a concrete class (`Counter`): the type-derived
-//! #     // form derives `()Ljava/lang/Object;` and register_natives resolves
-//! #     // the exact return type via reflection at registration time.
-//! #     native!("create", counter_create)?,
-//! #     native_inst!("increment", counter_increment)?,
-//! #     native_inst!("value", counter_value)?,
-//! # ])?;
+//! # // The batch form: one `?`, no array brackets (equivalent to the array
+//! # // form `clazz.register_natives(&[native!(...)?, ...])?`). `create`
+//! # // returns a concrete class (`Counter`): the type-derived form derives
+//! # // `()Ljava/lang/Object;` and register_natives resolves the exact return
+//! # // type via reflection at registration time.
+//! # register_natives!(clazz, native!("create", counter_create), native_inst!("increment", counter_increment), native_inst!("value", counter_value))?;
 //! # let counter: JObject = clazz.call_static("create", ())?;
 //! # let n: i64 = counter.call("increment", (5_i64,))?;
 //! # assert_eq!(n, 5);
@@ -348,7 +351,7 @@
 //! | `mlua::FromLua`         | [`FromJava`] (JNI value → Rust)         |
 //! | `MultiValue`            | tuples (`()`, `(a, b)`, … up to 64)     |
 //! | `mlua::Error`           | [`JavaError`]                           |
-//! | `Lua::create_function`  | `JClass::register_natives` + [`native!`] / [`native_inst!`] |
+//! | `Lua::create_function`  | `JClass::register_natives` + [`native!`] / [`native_inst!`] / [`register_natives!`] |
 //! | `mlua::UserData`        | [`userdata`] (`bind` / `get` / `unbind` / `create_shell`) + [`native_inst!`] |
 //!
 //! # Thread model
@@ -537,6 +540,44 @@ pub use rjava_macros::native_inst;
 /// [`future`] module docs for the contract and the
 /// [`native!`] type-derived rules it shares.
 pub use rjava_macros::async_native;
+
+/// Batch-register native methods on a class with one `?` and no array
+/// brackets.
+///
+/// Sugar over the array form
+/// [`JClass::register_natives`](crate::JClass::register_natives):
+/// the batch `register_natives!(clazz, native!(...), native_inst!(...))?`
+/// replaces `clazz.register_natives(&[native!(...)?, native_inst!(...)?])?`.
+/// Each item — any mix of [`native!`], [`native_inst!`] and
+/// [`async_native!`] invocations, which all yield a
+/// `JavaResult<NativeMethod>` — is unwrapped with `?` inside the generated
+/// array, so the whole batch still unwraps through the caller's **one** `?`
+/// at the end. An optional trailing comma is accepted; at least one method
+/// is required (an empty batch is a compile error).
+///
+/// ```rust,no_run
+/// # use rjava::prelude::*;
+/// # use rjava::{native, native_inst, register_natives};
+/// # fn example(clazz: JClass) -> JavaResult<()> {
+/// // Java: `public static native int add(int a, int b);`
+/// //       `public native int times(int factor);`
+/// fn add(_env: &mut jni::Env, (a, b): (i32, i32)) -> JavaResult<i32> {
+///     Ok(a + b)
+/// }
+/// fn times(_env: &mut jni::Env, (this, factor): (JObject, i32)) -> JavaResult<i32> {
+///     let base: i32 = this.get_field("base")?;
+///     Ok(base * factor)
+/// }
+/// register_natives!(clazz, native!("add", add), native_inst!("times", times))?;
+/// let sum: i32 = clazz.call_static("add", (2, 3))?;   // -> 5
+/// # Ok(()) }
+/// ```
+#[macro_export]
+macro_rules! register_natives {
+    ($clazz:expr, $($m:expr),+ $(,)?) => {
+        $crate::JClass::register_natives(&$clazz, &[$($m?,)+])
+    };
+}
 
 /// The `bind!` macro: declare a compile-time-typed binding for a Java class
 /// — the class name, a wrapper name, and the methods with their Rust types.

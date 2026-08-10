@@ -1,6 +1,6 @@
 [package]
 name = "rjava"
-version.workspace = true
+version = "0.1.1"
 edition = "2024"
 description = "Safe, ergonomic Java interop for Rust, modeled after mlua (a safe wrapper over the JNI)"
 license.workspace = true

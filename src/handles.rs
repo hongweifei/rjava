@@ -232,6 +232,11 @@ impl JClass {
     /// # Ok(()) }
     /// ```
     ///
+    /// The [`register_natives!`](crate::register_natives) batch macro is the
+    /// one-`?` form of this call for several descriptors at once (any mix of
+    /// [`native!`](crate::native), [`native_inst!`](crate::native_inst) and
+    /// [`async_native!`](crate::async_native) items, no array brackets).
+    ///
     /// Registering a name/signature that does not match a `native` method of
     /// this class raises a Java `NoSuchMethodError`, surfaced as
     /// [`JavaError::JavaException`]. One automatic fix: a **type-derived**

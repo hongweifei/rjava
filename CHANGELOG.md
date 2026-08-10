@@ -6,6 +6,18 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 Following the standard convention for 0.x releases: 0.x means pre-1.0, so
 breaking changes may arrive in any minor or patch release until 1.0.
 
+## [0.1.1] - 2026-08-10
+
+### Added
+- `register_natives!` — the batch form of `JClass::register_natives`:
+  `register_natives!(clazz, native!("a", a), native_inst!("b", b), async_native!("c", c))?`
+  registers several native methods with **one** `?` and no array brackets
+  (each item's `JavaResult` unwraps inside the generated array). Accepts any
+  mix of `native!` / `native_inst!` / `async_native!` items and an optional
+  trailing comma; at least one method is required. Implemented as a
+  declarative macro in the crate itself — no new dependency, rjava-macros
+  untouched (its 0.1.0 stays live).
+
 ## [0.1.0] - 2026-08-09
 
 First public release. `rjava` is a safe, ergonomic Java-interop crate for
