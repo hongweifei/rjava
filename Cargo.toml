@@ -1,0 +1,97 @@
+[package]
+name = "rjava"
+version.workspace = true
+edition = "2024"
+description = "Safe, ergonomic Java interop for Rust, modeled after mlua (a safe wrapper over the JNI)"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["java", "jni", "jvm", "interop", "ffi"]
+categories = ["api-bindings", "development-tools::ffi"]
+exclude = [".github/"]
+
+[workspace]
+members = ["rjava-macros", "rjava-helper"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://gitee.com/hongweifei/rjava.git"
+rust-version = "1.88"
+
+[package.metadata.docs.rs]
+# Build docs.rs with all features (serde, interface, tokio) so the
+# feature-gated modules appear in the hosted docs.
+all-features = true
+
+[dependencies]
+jni = { version = "0.22", features = ["invocation"] }
+parking_lot = "0.12"
+# Blocking executor for the async-native worker threads (`async_native!`):
+# `futures_lite::future::block_on` drives a future with a real thread-parking
+# waker — executor-agnostic futures complete, and the `unsafe` (waker
+# construction) stays inside futures-lite, never in rjava.
+futures-lite = "2.6.1"
+rjava-macros = { path = "rjava-macros", version = "0.1.0" }
+rjava-helper = { path = "rjava-helper", version = "0.1.0" }
+serde = { version = "1", features = ["derive"], optional = true }
+# Optional tokio integration: `Java::call_async` / `Java::call_static_async`
+# dispatch the JVM call through `tokio::task::spawn_blocking` when a tokio
+# runtime is current (falling back to a std thread otherwise). The std-only
+# path is always available; enabling the feature never requires tokio in
+# user code.
+tokio = { version = "1", features = ["rt", "time", "sync"], optional = true }
+
+[features]
+# Optional serde integration (`rjava::serde`): convert Rust structs ⇄
+# java.util.HashMap / java.util.ArrayList value trees via serde's
+# Serialize/Deserialize. See the `serde` module docs.
+serde = ["dep:serde"]
+
+# Optional Java-interface implementation (`rjava::interface`): implement
+# Java interfaces from Rust with zero user-written Java implementation
+# classes, via the JDK's `java.lang.reflect.Proxy` plus one fixed precompiled
+# shell class. The shell class is precompiled (`javac --release 8`) and
+# committed, so building with this feature needs no JDK; see the `interface`
+# module docs.
+interface = []
+
+# Optional tokio integration (`Java::call_async` / `Java::call_static_async`
+# use `tokio::task::spawn_blocking` when a tokio runtime is current; the
+# std-thread fallback always applies otherwise). See the `Java::call_async`
+# docs.
+tokio = ["dep:tokio"]
+
+[dev-dependencies]
+# Rebuild this crate with the `serde` and `interface` features so the
+# integration tests (tests/serde_map.rs, tests/bean_map.rs, tests/interface.rs)
+# exercise the feature-gated modules; `tokio` (feature + crate) so
+# tests/async_rx.rs exercises the tokio-aware call_async path.
+rjava = { path = ".", features = ["serde", "interface", "tokio"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+# Benchmark harness (benches/bench.rs); not used by the library itself.
+criterion = "0.5"
+
+[[bench]]
+name = "bench"
+# criterion provides its own main (criterion_main!); the default libtest
+# harness would swallow the benchmarks.
+harness = false
+
+[[example]]
+name = "interface"
+# This example implements Java interfaces from Rust (rjava::interface! +
+# interface::proxy), so it needs the `interface` feature; without it,
+# `cargo build --examples` (default features) must NOT compile the file.
+required-features = ["interface"]
+
+[[example]]
+name = "async_demo"
+# This example awaits Java futures (rjava::future), runs async method calls
+# (Java::call_async — tokio-aware) and bridges a listener callback
+# (rjava::rx, which needs `interface`), so it needs both features; without
+# them, `cargo build --examples` (default features) must NOT compile the
+# file.
+required-features = ["tokio", "interface"]

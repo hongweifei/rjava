@@ -1,0 +1,18 @@
+[package]
+name = "rjava-macros"
+version.workspace = true
+edition = "2024"
+description = "Proc macros for rjava: signature-string native!/native_inst! and compile-time-typed bind!"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["java", "jni", "jvm", "interop", "ffi"]
+categories = ["api-bindings", "development-tools::ffi"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

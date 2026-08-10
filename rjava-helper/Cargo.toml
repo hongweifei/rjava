@@ -1,0 +1,13 @@
+[package]
+name = "rjava-helper"
+version.workspace = true
+edition = "2024"
+description = "Macros for rjava's native-method feature (Rust functions callable from Java)"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["java", "jni", "jvm", "interop", "ffi"]
+categories = ["api-bindings", "development-tools::ffi"]
+
+[dependencies]
+jni = { version = "0.22", features = ["invocation"] }

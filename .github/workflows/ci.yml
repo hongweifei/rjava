@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      # Zero warnings is a hard gate: any rustc warning fails the build.
+      RUSTFLAGS: "-D warnings"
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Temurin JDK 21 sets JAVA_HOME for java-locator (jvm.dll/libjvm.so/
+      # libjvm.dylib) and provides javac for the test fixtures. On
+      # macos-latest this is an arm64 JDK — exactly the aarch64 ABI coverage
+      # the per-arity generic trampolines need.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Default-feature build: the default-feature configuration is the one
+      # that ships, so it must compile on its own.
+      - name: Build (all targets, default features)
+        run: cargo build --all-targets
+
+      # All-features clippy doubles as the all-features compile gate: the
+      # serde-gated src/serde.rs + src/bean.rs are only ever compiled when
+      # the `serde` feature is on, so they need CI coverage. All-features is
+      # a superset of the default feature set, and warnings in default-only
+      # code already fail the plain build above (RUSTFLAGS="-D warnings"), so
+      # a separate default-feature clippy pass would be redundant. Cargo runs
+      # clippy on path dependencies too, so rjava-macros / rjava-helper
+      # are linted here as well.
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # The test harness skips silently when no JVM/javac is found (skipped
+      # tests still exit 0). Tee the output and fail the job if ANY skip
+      # message appears, so the JVM really was exercised. `shell: bash`
+      # because the Windows runner default shell (pwsh) does not support the
+      # `! grep` form.
+      #
+      # The serde-gated TESTS run inside this plain `cargo test`: the
+      # workspace declares `rjava = { path = ".", features = ["serde"] }` as
+      # a dev-dependency, so the crate is rebuilt with the `serde` feature
+      # for the test binaries — tests/serde_map.rs and tests/bean_map.rs
+      # exercise src/serde.rs + src/bean.rs through that dev-dep link.
+      - name: Test (real JVM)
+        run: cargo test 2>&1 | tee /tmp/cargo-test.log
+        shell: bash
+
+      - name: Fail if any test silently skipped
+        run: '! grep -E "SKIPPING (test|plugin|native|userdata)" /tmp/cargo-test.log'
+        shell: bash
+
+      # Docs for the serde-gated modules must build warning-free too
+      # (RUSTDOCFLAGS="-D warnings"); `--all-features` is the same
+      # configuration docs.rs uses.
+      - name: Doc build (all features, no deps)
+        run: cargo doc --no-deps --all-features
+
+      # Compiles the criterion harness on all three OSes so bench breakage is
+      # caught in CI. Criterion fixtures are javac-compiled at bench *run*
+      # time, so this needs no JVM — and it never runs the benchmarks.
+      - name: Bench compile gate (criterion harness)
+        run: cargo bench --no-run
+
+      - name: Smoke — basic example
+        run: cargo run --example basic
+
+  # MSRV drift is a regression: the crate uses let-chains (stabilized in
+  # 1.88) and declares rust-version = "1.88". This job pins the exact MSRV
+  # toolchain (no clippy component needed) and type-checks every target as a
+  # drift guard — if new code or a dependency floor pushes the MSRV up, this
+  # job fails. A JDK is installed even though `cargo check` does not link,
+  # keeping the job honest about the runtime requirement.
+  msrv:
+    name: msrv (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Check (all targets, MSRV 1.88)
+        run: cargo check --all-targets
