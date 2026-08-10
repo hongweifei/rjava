@@ -1,0 +1,4 @@
+/target
+/rjava-macros/target
+/rjava-helper/target
+hs_err_pid*.log
